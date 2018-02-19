@@ -297,14 +297,17 @@ func watchListedPackages(output []byte) {
 	packages := strings.Split(strings.TrimSpace(string(output)), "\n")
 
 	for _, p := range packages {
+		if p == "" {
+			continue
+		}
 		pkg, err := build.Default.Import(p, ".", build.FindOnly)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "lrt: "+err.Error())
+			fmt.Fprintf(os.Stderr, "lrt: "+err.Error(), "\n")
 			os.Exit(1)
 		}
 
 		// exclude vendor to prevent running out of file descriptors.
-		if !pkg.Goroot && !strings.Contains(pkg.Dir, "/endor/") {
+		if !pkg.Goroot && !strings.Contains(pkg.Dir, "/vendor/") {
 			if !watchedDir[pkg.Dir] {
 				err = watcher.Add(pkg.Dir)
 				if err != nil {
