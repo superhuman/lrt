@@ -33,7 +33,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-fsnotify/fsnotify"
+	"github.com/fsnotify/fsnotify"
 	shellwords "github.com/mattn/go-shellwords"
 )
 
