@@ -82,30 +82,9 @@ func main() {
 
 	go rebuildOnChange()
 
-	proxy := httputil.NewSingleHostReverseProxy(serviceURL)
+	proxy := &blockingProxy{httputil.NewSingleHostReverseProxy(serviceURL)}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		proxyLock.RLock()
-		defer proxyLock.RUnlock()
-
-		// on first boot we want to ensure we don't pass any
-		// requests through until we've built the service.
-		for !builtOnce {
-			proxyLock.RUnlock()
-			time.Sleep(100 * time.Millisecond)
-			proxyLock.RLock()
-		}
-
-		if errorResponse != nil {
-			w.WriteHeader(http.StatusBadGateway)
-			w.Write(errorResponse)
-			return
-		}
-
-		proxy.ServeHTTP(w, r)
-	})
-
-	err := http.ListenAndServe(listenURL.Host, nil)
+	err := http.ListenAndServe(listenURL.Host, proxy)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
 		if strings.Contains(err.Error(), "address already in use") {
@@ -114,6 +93,31 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+type blockingProxy struct {
+	proxy http.Handler
+}
+
+func (b *blockingProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	proxyLock.RLock()
+	defer proxyLock.RUnlock()
+
+	// on first boot we want to ensure we don't pass any
+	// requests through until we've built the service.
+	for !builtOnce {
+		proxyLock.RUnlock()
+		time.Sleep(100 * time.Millisecond)
+		proxyLock.RLock()
+	}
+
+	if errorResponse != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write(errorResponse)
+		return
+	}
+
+	b.proxy.ServeHTTP(w, r)
 }
 
 // rebuildOnChange sets up all the watches and the rebuilder
@@ -307,7 +311,7 @@ func watchListedPackages(output []byte) {
 		}
 
 		// exclude vendor to prevent running out of file descriptors.
-		if !pkg.Goroot && !strings.Contains(pkg.Dir, "/vendor/") {
+		if !pkg.Goroot {
 			if !watchedDir[pkg.Dir] {
 				err = watcher.Add(pkg.Dir)
 				if err != nil {
