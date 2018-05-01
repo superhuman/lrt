@@ -108,7 +108,7 @@ func getStringResponse(t *testing.T, url *url.URL) string {
 }
 
 func waitForFsNotify() {
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 }
 
 func TestLrt(t *testing.T) {
@@ -118,7 +118,7 @@ func TestLrt(t *testing.T) {
 	response := getStringResponse(t, listenURL)
 
 	if response != "lrt/test: OK" {
-		t.Errorf("Got unexpected response from lrt: %s", response)
+		t.Errorf("Got unexpected response from lrt: %#v", response)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestLrt_Rebuild(t *testing.T) {
 	response := getStringResponse(t, listenURL)
 
 	if response != "lrt/test: OK" {
-		t.Errorf("Got unexpected response from lrt: %s", response)
+		t.Errorf("Got unexpected response from lrt: %#v", response)
 	}
 
 	defer os.Remove("test/override.go")
@@ -145,7 +145,15 @@ func TestLrt_Rebuild(t *testing.T) {
 
 	response = getStringResponse(t, listenURL)
 	if response != "lrt/test: OVERRIDE" {
-		t.Errorf("Got unexpected response from lrt: %s", response)
+		t.Errorf("Got unexpected response from lrt: %#v", response)
+	}
+
+	os.Remove("test/override.go")
+	waitForFsNotify()
+
+	response = getStringResponse(t, listenURL)
+	if response != "lrt/test: OK" {
+		t.Errorf("Got unexpected response from lrt: %#v", response)
 	}
 }
 
