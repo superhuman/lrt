@@ -56,17 +56,18 @@ https://github.com/superhuman/lrt
 
 ## How it works
 
-lrt uses [notify](https://github.com/rjeczalik/notify) to monitor the filesytem
-for changes and rebuilds and restarts your service when any files change. lrt
-is designed to proxy all requests to your service so that these restarts are
-transparent to calling code.
+lrt uses fsnotify to monitor the filesytem for changes and rebuilds and
+restarts your service when any files change. lrt is designed to proxy all
+requests to your service so that these restarts are transparent to calling
+code.
 
 ### Building
 
-When started, and when a change is detected, lrt builds your service using
-`go build -o lrt-service-XXX -v package`. The `-v` is used to track dependencies,
-and `-o` is always set to a temporary file that is deleted when lrt exits. To
-customize other arguments to go build, you can pass them as `--build-args`.
+When started, and when a change is detected, lrt builds your service using `go
+build -o lrt-service-XXX -i -v package`. The `-i` accelerates rebuilds, and
+`-v` is used to track dependencies.  `-o` is always set to a temporary file
+that is deleted when lrt exits. To customize other arguments to go build, you can
+pass them as `--build-args`.
 
 For example to set ld flags on the go executable, you could do something like:
 
@@ -94,7 +95,7 @@ lrt -cmd-args="--debug --database-url=\"psql://localhost/test\""
 PORT=XXX service --debug --database-url="psql://localhost/test"
 ```
 
-If your service ignores the PORT environment variable, and always listens on a
+If your service ignores the PORT environment variable, andalways listens on a
 particular port you can tell lrt where to find it by passing the `-service`
 parameter.
 
@@ -161,7 +162,7 @@ to shut down.
 ## Credits etc.
 
 lrt is inspired by [gin](https://github.com/codegangsta/gin), which was an
-earlier version of the idea.
+earlier, buggier, version of the idea.
 
 Bug reports and pull requests are welcome! The general philosophy of lrt is
 that it should firstly be as correct as possible, and secondly as easy to use

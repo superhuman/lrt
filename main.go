@@ -33,8 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	shellwords "github.com/mattn/go-shellwords"
-	"github.com/rjeczalik/notify"
 )
 
 // raw arguments
@@ -68,7 +68,7 @@ var (
 	waiter  sync.WaitGroup
 	tmpFile *os.File
 
-	eventChan  chan notify.EventInfo
+	watcher    *fsnotify.Watcher
 	watchedDir = map[string]bool{}
 )
 
@@ -122,9 +122,13 @@ func (b *blockingProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // rebuildOnChange sets up all the watches and the rebuilder
 func rebuildOnChange() {
-	eventChan = make(chan notify.EventInfo)
-	defer notify.Stop(eventChan)
-	defer close(eventChan)
+	var err error
+	watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Fprint(os.Stderr, "lrt: "+err.Error())
+		os.Exit(1)
+	}
+	defer watcher.Close()
 
 	rebuilder := debounceCallable(100*time.Millisecond, rebuild)
 	go rebuilder()
@@ -147,10 +151,15 @@ func rebuildOnChange() {
 	for {
 		select {
 		// watch for events
-		case ev := <-eventChan:
-			if strings.HasSuffix(ev.Path(), ".go") && !strings.HasSuffix(ev.Path(), "_test.go") {
+		case ev := <-watcher.Events:
+			if (strings.HasSuffix(ev.Name, ".go") && !strings.HasSuffix(ev.Name, "_test.go")) && ev.Op != fsnotify.Chmod {
 				go rebuilder()
 			}
+
+			// watch for errors
+		case err := <-watcher.Errors:
+			fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
+			os.Exit(1)
 		}
 	}
 }
@@ -190,7 +199,7 @@ func rebuild() {
 
 	stopRunningService()
 
-	args := append(buildArgs, "-o", tmpFile.Name(), "-v", packageName)
+	args := append(buildArgs, "-o", tmpFile.Name(), "-i", "-v", packageName)
 	output, err := exec.Command("go", append([]string{"build"}, args...)...).CombinedOutput()
 
 	if err != nil {
@@ -301,17 +310,20 @@ func watchListedPackages(output []byte) {
 			os.Exit(1)
 		}
 
-		if !watchedDir[pkg.Dir] {
-			err = notify.Watch(pkg.Dir, eventChan, notify.Write|notify.Remove|notify.Create)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "lrt: "+err.Error()+"\n")
-				if strings.Contains(err.Error(), "too many open files") {
-					fmt.Fprintf(os.Stderr, "     hint: you may need to increase the number of open files you are allowed, try:\n")
-					fmt.Fprintf(os.Stderr, "           sudo launchctl limit maxfiles 1000000 1000000\n")
+		// exclude vendor to prevent running out of file descriptors.
+		if !pkg.Goroot {
+			if !watchedDir[pkg.Dir] {
+				err = watcher.Add(pkg.Dir)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "lrt: "+err.Error()+"\n")
+					if strings.Contains(err.Error(), "too many open files") {
+						fmt.Fprintf(os.Stderr, "     hint: you may need to increase the number of open files you are allowed, try:\n")
+						fmt.Fprintf(os.Stderr, "           sudo launchctl limit maxfiles 1000000 1000000\n")
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
+				watchedDir[pkg.Dir] = true
 			}
-			watchedDir[pkg.Dir] = true
 		}
 
 	}
