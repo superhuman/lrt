@@ -159,6 +159,18 @@ requests lrt will wait for the old service to exit before starting the new one,
 so if things are slower than they should be, check how long your service takes
 to shut down.
 
+## Limitations
+
+lrt currently assumes that the build environment does not change between when you
+compiled lrt and when you are compiling other programs using lrt.
+
+If you are seeing problems with build failing because of missing packages or
+mis-matched paths reinstall lrt with `go install github.com/superhuman/lrt`.
+
+The only exception to the above limitation is that if the go version has
+changed `lrt` will recompile itself and then run the new version of `lrt`
+automatically.
+
 ## Credits etc.
 
 lrt is inspired by [gin](https://github.com/codegangsta/gin), which was an

@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,7 @@ var (
 
 // main
 func main() {
+	rebuildIfNecessary()
 
 	mustParseArgs()
 	defer os.Remove(tmpFile.Name())
@@ -92,6 +94,45 @@ func main() {
 			fmt.Fprintf(os.Stderr, "           if so try `lsof -i:%v` to find the process id\n", listenURL.Port())
 		}
 		os.Exit(1)
+	}
+}
+
+// rebuildIfNecessary notices if the go version has changed since lrt was compiled
+// and, if so, recompiles it.
+// N.B. If a recompilation is neceessary, rebuildIfNecessary will re-exec the current process
+// so after calling this method the latest lrt will continue.
+func rebuildIfNecessary() {
+	// TODO what else should we check?
+	output, err := exec.Command("go", "version").CombinedOutput()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			fmt.Fprint(os.Stderr, "lrt: "+string(output))
+		} else {
+			fmt.Fprint(os.Stderr, "lrt: "+err.Error()+"\n")
+		}
+		os.Exit(1)
+	}
+	if !strings.Contains(string(output), " "+runtime.Version()+" ") {
+		fmt.Printf("lrt: new go version detected, reinstalling lrt for %v...\n", string(output))
+
+		output, err = exec.Command("go", "install", "github.com/superhuman/lrt").CombinedOutput()
+		if err != nil {
+			if _, ok := err.(*exec.ExitError); ok {
+				fmt.Fprint(os.Stderr, "lrt: "+string(output))
+			} else {
+				fmt.Fprint(os.Stderr, "lrt: "+err.Error()+"\n")
+			}
+			os.Exit(1)
+		}
+		binary, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			fmt.Fprint(os.Stderr, "lrt: "+err.Error()+"\n")
+			os.Exit(1)
+		}
+		if err := syscall.Exec(binary, os.Args, os.Environ()); err != nil {
+			fmt.Fprint(os.Stderr, "lrt: "+err.Error()+"\n")
+			os.Exit(1)
+		}
 	}
 }
 
