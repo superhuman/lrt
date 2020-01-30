@@ -345,6 +345,12 @@ func watchListedPackages(output []byte) {
 		if p == "" {
 			continue
 		}
+		// HACK:CI work around  https://github.com/golang/go/issues/36025
+		// a better solution would be to listen differently to stdout and stderr when running compile.
+		if strings.HasPrefix(p, "# ") || strings.HasPrefix(p, "ld:") {
+			fmt.Fprintln(os.Stderr, p)
+			continue
+		}
 		pkg, err := build.Default.Import(p, ".", build.FindOnly)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "lrt: "+err.Error(), "\n")
