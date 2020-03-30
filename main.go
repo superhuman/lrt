@@ -74,8 +74,8 @@ var (
 	watcher    *fsnotify.Watcher
 	watchedDir = map[string]bool{}
 
-	goModulePrefix string
-	goModuleDir    string
+	goModule    *gomod.Module
+	goModuleDir string
 )
 
 // main
@@ -126,7 +126,7 @@ func figureOutModules() {
 			fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
 			os.Exit(1)
 		}
-		goModulePrefix = parsed.Name
+		goModule = parsed
 		goModuleDir = filepath.Dir(goModuleFile)
 	}
 
@@ -389,9 +389,16 @@ func watchListedPackages(output []byte) {
 
 		dir := ""
 
-		if goModuleDir != "" {
-			if strings.HasPrefix(p, goModulePrefix) {
-				dir = goModuleDir + strings.TrimPrefix(p, goModulePrefix)
+		if goModule != nil {
+			if strings.HasPrefix(p, goModule.Name) {
+				dir = goModuleDir + strings.TrimPrefix(p, goModule.Name)
+			}
+			for path, replace := range goModule.Replace {
+				if strings.HasPrefix(p, path) {
+					if r, ok := replace.(gomod.RelativePath); ok {
+						dir = string(r) + strings.TrimPrefix(p, path)
+					}
+				}
 			}
 		} else {
 			pkg, err := build.Default.Import(p, ".", build.FindOnly)
