@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	shellwords "github.com/mattn/go-shellwords"
+	"github.com/sirkon/goproxy/gomod"
 )
 
 // raw arguments
@@ -71,6 +73,9 @@ var (
 
 	watcher    *fsnotify.Watcher
 	watchedDir = map[string]bool{}
+
+	goModulePrefix string
+	goModuleDir    string
 )
 
 // main
@@ -79,6 +84,8 @@ func main() {
 
 	mustParseArgs()
 	defer os.Remove(tmpFile.Name())
+
+	figureOutModules()
 
 	fmt.Printf("lrt: listening on %s (forwarding to %s)\n", listenURL, serviceURL)
 
@@ -95,6 +102,34 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// We noticed since switching to go modules that the commands we were using
+// to rebuild go were very slow. If run in the context of a go module, lrt will
+// use a faster rebuild mechanism.
+func figureOutModules() {
+	output, err := exec.Command("go", "env", "GOMOD").CombinedOutput()
+	if err != nil {
+		fmt.Fprint(os.Stderr, "lrt: "+string(output))
+		fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
+		os.Exit(1)
+	}
+	goModuleFile := strings.TrimSpace(string(output))
+	if goModuleFile != "" {
+		modContents, err := ioutil.ReadFile(goModuleFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
+			os.Exit(1)
+		}
+		parsed, err := gomod.Parse(goModuleFile, modContents)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "lrt: "+err.Error())
+			os.Exit(1)
+		}
+		goModulePrefix = parsed.Name
+		goModuleDir = filepath.Dir(goModuleFile)
+	}
+
 }
 
 // rebuildIfNecessary notices if the go version has changed since lrt was compiled
@@ -351,28 +386,36 @@ func watchListedPackages(output []byte) {
 			fmt.Fprintln(os.Stderr, p)
 			continue
 		}
-		pkg, err := build.Default.Import(p, ".", build.FindOnly)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "lrt: "+err.Error(), "\n")
-			os.Exit(1)
-		}
 
-		// exclude vendor to prevent running out of file descriptors.
-		if !pkg.Goroot {
-			if !watchedDir[pkg.Dir] {
-				err = watcher.Add(pkg.Dir)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "lrt: "+err.Error()+"\n")
-					if strings.Contains(err.Error(), "too many open files") {
-						fmt.Fprintf(os.Stderr, "     hint: you may need to increase the number of open files you are allowed, try:\n")
-						fmt.Fprintf(os.Stderr, "           sudo launchctl limit maxfiles 1000000 1000000\n")
-					}
-					os.Exit(1)
-				}
-				watchedDir[pkg.Dir] = true
+		dir := ""
+
+		if goModuleDir != "" {
+			if strings.HasPrefix(p, goModulePrefix) {
+				dir = goModuleDir + strings.TrimPrefix(p, goModulePrefix)
+			}
+		} else {
+			pkg, err := build.Default.Import(p, ".", build.FindOnly)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "lrt: "+err.Error(), "\n")
+				os.Exit(1)
+			}
+			if !pkg.Goroot {
+				dir = pkg.Dir
 			}
 		}
 
+		if dir != "" && !watchedDir[dir] {
+			err := watcher.Add(dir)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "lrt: "+err.Error()+"\n")
+				if strings.Contains(err.Error(), "too many open files") {
+					fmt.Fprintf(os.Stderr, "     hint: you may need to increase the number of open files you are allowed, try:\n")
+					fmt.Fprintf(os.Stderr, "           sudo launchctl limit maxfiles 1000000 1000000\n")
+				}
+				os.Exit(1)
+			}
+			watchedDir[dir] = true
+		}
 	}
 }
 
