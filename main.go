@@ -275,7 +275,7 @@ func rebuild() {
 
 	stopRunningService()
 
-	args := append(buildArgs, "-o", tmpFile.Name(), "-i", "-v", packageName)
+	args := append(buildArgs, "-o", tmpFile.Name(), "-v", packageName)
 	output, err := exec.Command("go", append([]string{"build"}, args...)...).CombinedOutput()
 
 	if err != nil {
@@ -295,6 +295,11 @@ func rebuild() {
 	waiter.Wait()
 
 	service = exec.Command(tmpFile.Name(), cmdArgs...)
+	// disable ctrl-c to child process; we'll do that ourselves
+	service.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    0,
+	}
 	service.Env = append(os.Environ(), "PORT="+serviceURL.Port())
 	service.Stdout = os.Stdout
 	service.Stderr = os.Stderr
@@ -359,6 +364,7 @@ func stopRunningService() {
 			}()
 			select {
 			case <-time.After(10 * time.Second):
+				fmt.Fprintf(os.Stderr, "timeout expired; sending SIGKILL")
 				service.Process.Kill()
 				service.Process.Wait()
 			case <-deadChan:
