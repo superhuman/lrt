@@ -64,10 +64,10 @@ code.
 ### Building
 
 When started, and when a change is detected, lrt builds your service using `go
-build -o lrt-service-XXX -i -v package`. The `-i` accelerates rebuilds, and
-`-v` is used to track dependencies.  `-o` is always set to a temporary file
-that is deleted when lrt exits. To customize other arguments to go build, you can
-pass them as `--build-args`.
+build -o lrt-service-XXX -v package`. The `-v` is used to track
+dependencies.  `-o` is always set to a temporary file that is deleted when lrt
+exits. To customize other arguments to go build, you can pass them as
+`--build-args`.
 
 For example to set ld flags on the go executable, you could do something like:
 
@@ -109,15 +109,15 @@ listening on. This defaults to port 3000, but you can change this if you are usi
 that port for something else.
 
 ```
-lrt -listen localhost:80000 -service localhost:8080
+lrt -listen localhost:8000 -service localhost:8080
 # lrt will listen on port 8000 and forward requests to 8080
 ```
 
 ### Health checks
 
 In order to avoid dropping requests while your service boots, lrt will ping a
-healthcheck url until it gets a 200 response. By default the healthcheck is "/", but you
-can override this with:
+healthcheck url until it gets a 200 response. By default the healthcheck is
+"/", but you can override this with:
 
 ```
 lrt --health-check "/ping"
@@ -174,7 +174,7 @@ automatically.
 ## Credits etc.
 
 lrt is inspired by [gin](https://github.com/codegangsta/gin), which was an
-earlier, buggier, version of the idea.
+earlier version of the idea.
 
 Bug reports and pull requests are welcome! The general philosophy of lrt is
 that it should firstly be as correct as possible, and secondly as easy to use
