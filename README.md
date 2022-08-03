@@ -48,6 +48,9 @@ options:
     	where lrt should listen (default "localhost:3000")
   -service string
     	where your service listens (if it does not listen on $PORT)
+  -service-name string
+    	If you provider a service name, it will be used on the temp file.
+    	It makes easy to find the correct process if you are running more than one lrt service.
 
 lrt listens on localhost:3000 and boots your service with a PORT environment variable set.
 Your service should start an HTTP server on the provided port. For more details see:
