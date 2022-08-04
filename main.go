@@ -44,6 +44,7 @@ import (
 var (
 	listenFlag      = flag.String("listen", "localhost:3000", "where lrt should listen")
 	serviceFlag     = flag.String("service", "", "where your service listens (if it does not listen on $PORT)")
+	serviceNameFlag = flag.String("service-name", "", "If you provider a service name, it will be used on the temp file.\nIt makes easy to find the correct process if you are running more than one lrt service.")
 	buildArgsFlag   = flag.String("build-args", "", "extra flags to pass to go build")
 	cmdArgsFlag     = flag.String("cmd-args", "", "extra flags to pass to the service executable")
 	healthCheckFlag = flag.String("health-check", "/", "the path lrt pings to check your service has started")
@@ -558,7 +559,12 @@ https://github.com/superhuman/lrt
 		panic(err) // can only happen if shellwords.ParseBacktick is true, and it isn't
 	}
 
-	tmpFile, err = ioutil.TempFile("", "lrt-service")
+	pattern := "lrt-service"
+	if *serviceNameFlag != "" {
+		pattern += "-" + *serviceNameFlag + "-"
+	}
+
+	tmpFile, err = ioutil.TempFile("", pattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "lrt: "+err.Error())
 		os.Exit(1)

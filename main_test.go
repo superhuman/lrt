@@ -246,7 +246,7 @@ func TestLrt_ServiceArg(t *testing.T) {
 
 	anotherURL := generateServiceURL(baseListenURL)
 
-	listenURL, stop := startLrtForTests(t, "-cmd-args", "-override-port "+anotherURL.Port(), "-service", anotherURL.Host)
+	listenURL, stop := startLrtForTests(t, "-cmd-args", "-override-port "+anotherURL.Port(), "-service", anotherURL.Host, "-service-name", "TestLrt")
 	defer stop()
 
 	response := getStringResponse(t, listenURL)
